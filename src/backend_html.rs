@@ -105,7 +105,6 @@ impl BackendHtml {
                 .ok()
                 .and_then(|s| crate::parse(s).ok())
                 .map_or(HashMap::new(), |ast| {
-                    dbgs!(ast);
                     ast.metadata
                         .into_iter()
                         .map(|(k, v)| (format!("!{}", k), v))

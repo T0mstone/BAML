@@ -49,7 +49,6 @@ impl TemplateEngine {
             let mut exclude_by_name = Vec::new();
             let mut sort_key = None;
             let mut sort_descending = false;
-            dbgs!(args, args.split(':').collect::<Vec<_>>());
             for arg in args.split(':') {
                 let mut spl = arg.splitn(2, ' ');
                 let verb = spl.next().unwrap();
@@ -57,7 +56,6 @@ impl TemplateEngine {
                     Some(x) => x,
                     None => continue,
                 };
-                dbgs!(verb, object);
                 match verb {
                     "with" => var = Some(object),
                     "in" => path = Some(object),
@@ -71,9 +69,10 @@ impl TemplateEngine {
                         }
                     }
                     "exclude_name" => {
-                        exclude_by_name
-                            .append(&mut dbg!(split_unescaped_string(object, ' ', None, false)
-                                .collect::<Vec<_>>()));
+                        exclude_by_name.append(
+                            &mut split_unescaped_string(object, ' ', None, false)
+                                .collect::<Vec<_>>(),
+                        );
                     }
                     verb => eprintln!("warning: ignoring unrecognised verb `{}`", verb),
                 }
@@ -86,7 +85,6 @@ impl TemplateEngine {
             for entry in std::fs::read_dir(dir).map_err(|e| format!("IOError: {:?}", e))? {
                 match entry {
                     Ok(e) => {
-                        dbgs!(e);
                         if e.path().file_name().map_or(false, |filename| {
                             exclude_by_name.iter().any(|pattern| {
                                 shell::matches_pattern(filename.to_string_lossy().as_ref(), pattern)
@@ -99,7 +97,6 @@ impl TemplateEngine {
                         let hm = {
                             let mut hm = self.vars.clone();
                             let file_vars = get_vars_from_file(e.path());
-                            dbgs!(file_vars);
                             hm.extend(file_vars);
                             if let Some(var) = var {
                                 if let Some(filename) = e.path().file_name() {
