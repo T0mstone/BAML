@@ -166,26 +166,26 @@ impl<T> Containerized<T> {
         self.map_inner(&mut f)
     }
 
-    fn flat_map_inner<I: IntoIterator, F: FnMut(T) -> I>(
-        self,
-        f: &mut F,
-    ) -> Vec<Containerized<I::Item>> {
-        match self {
-            Containerized::Free(t) => f(t).into_iter().map(Containerized::Free).collect(),
-            Containerized::Contained(v) => vec![Containerized::Contained(
-                v.into_iter()
-                    .flat_map(|c| c.flat_map_inner(&mut *f))
-                    .collect(),
-            )],
-        }
-    }
-
-    pub fn flat_map<I: IntoIterator, F: FnMut(T) -> I>(
-        self,
-        mut f: F,
-    ) -> Vec<Containerized<I::Item>> {
-        self.flat_map_inner(&mut f)
-    }
+    // fn flat_map_inner<I: IntoIterator, F: FnMut(T) -> I>(
+    //     self,
+    //     f: &mut F,
+    // ) -> Vec<Containerized<I::Item>> {
+    //     match self {
+    //         Containerized::Free(t) => f(t).into_iter().map(Containerized::Free).collect(),
+    //         Containerized::Contained(v) => vec![Containerized::Contained(
+    //             v.into_iter()
+    //                 .flat_map(|c| c.flat_map_inner(&mut *f))
+    //                 .collect(),
+    //         )],
+    //     }
+    // }
+    //
+    // pub fn flat_map<I: IntoIterator, F: FnMut(T) -> I>(
+    //     self,
+    //     mut f: F,
+    // ) -> Vec<Containerized<I::Item>> {
+    //     self.flat_map_inner(&mut f)
+    // }
 
     pub fn join<U: Into<T> + Clone>(self, left: U, right: U) -> Vec<T> {
         match self {

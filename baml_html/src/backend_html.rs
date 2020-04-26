@@ -1,5 +1,5 @@
-use crate::template::TemplateEngine;
-use crate::{Backend, Command, AST};
+use baml_core::template::TemplateEngine;
+use baml_core::{Backend, Command, AST};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -51,21 +51,21 @@ impl ToString for DomNode {
     }
 }
 
-impl DomNode {
-    pub fn child_nodes(&self) -> &[Self] {
-        match self {
-            DomNode::Text(_) => &[],
-            DomNode::Tag(t) => &t.child_nodes,
-        }
-    }
-
-    // pub fn child_nodes_mut(&mut self) -> Option<&mut Vec<Self>> {
-    //     match self {
-    //         DomNode::Text(_) => &mut vec![],
-    //         DomNode::Tag(t) => &mut t.child_nodes,
-    //     }
-    // }
-}
+// impl DomNode {
+//     pub fn child_nodes(&self) -> &[Self] {
+//         match self {
+//             DomNode::Text(_) => &[],
+//             DomNode::Tag(t) => &t.child_nodes,
+//         }
+//     }
+//
+//     // pub fn child_nodes_mut(&mut self) -> Option<&mut Vec<Self>> {
+//     //     match self {
+//     //         DomNode::Text(_) => &mut vec![],
+//     //         DomNode::Tag(t) => &mut t.child_nodes,
+//     //     }
+//     // }
+// }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BackendHtml {
@@ -103,7 +103,7 @@ impl BackendHtml {
         self.template_engine.run(|p| {
             std::fs::read_to_string(p)
                 .ok()
-                .and_then(|s| crate::parse(s).ok())
+                .and_then(|s| baml_core::parse(s).ok())
                 .map_or(HashMap::new(), |ast| {
                     ast.metadata
                         .into_iter()

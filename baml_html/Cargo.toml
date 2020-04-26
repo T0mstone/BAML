@@ -1,0 +1,11 @@
+[package]
+name = "baml_html"
+version = "0.1.0"
+authors = ["T0mstone <realt0mstone@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+baml_core = {path = "../baml_core"}
+clap = "2.33.0"

@@ -115,8 +115,8 @@ pub enum ASTNode {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AST {
-    metadata: HashMap<String, String>,
-    nodes: Vec<ASTNode>,
+    pub metadata: HashMap<String, String>,
+    pub nodes: Vec<ASTNode>,
 }
 
 pub trait Backend {
@@ -159,6 +159,6 @@ pub trait Backend {
     fn compile_ast(&mut self, ast: AST) -> Self::Output;
 }
 
-pub mod backend_html;
+// pub mod backend_html;
 mod parser;
 pub mod template;
