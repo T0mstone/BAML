@@ -1,5 +1,7 @@
+use crate::template::TemplateEngine;
 use crate::{Backend, Command, AST};
 use std::collections::HashMap;
+use std::path::Path;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct HtmlTag {
@@ -66,16 +68,51 @@ impl DomNode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BackendHtml;
+pub struct BackendHtml {
+    template_engine: TemplateEngine,
+}
 
 impl BackendHtml {
-    // fn get_curr(&mut self) -> &mut DomNode {
-    //     let mut res = &mut self.inner;
-    //     for i in self.curr {
-    //         res = &mut res.child_nodes_mut()[i];
-    //     }
-    //     res
-    // }
+    pub fn from_template_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        Ok(Self {
+            template_engine: TemplateEngine::new(path, HashMap::new())?,
+        })
+    }
+
+    pub fn node_from_command(&mut self, cmd: Command) -> DomNode {
+        DomNode::Tag(HtmlTag {
+            tag_name: cmd.cmd,
+            attributes: cmd.attributes,
+            child_nodes: cmd
+                .arguments
+                .into_iter()
+                .filter_map(|arg| self.handle_node(arg))
+                .collect(),
+        })
+    }
+
+    pub fn process_template(&mut self, content: String, meta: &HashMap<String, String>) -> String {
+        for (k, v) in meta {
+            self.template_engine
+                .vars
+                .insert(format!("!{}", k), v.clone());
+        }
+        self.template_engine
+            .vars
+            .insert("content".to_string(), content);
+        self.template_engine.run(|p| {
+            std::fs::read_to_string(p)
+                .ok()
+                .and_then(|s| crate::parse(s).ok())
+                .map_or(HashMap::new(), |ast| {
+                    dbgs!(ast);
+                    ast.metadata
+                        .into_iter()
+                        .map(|(k, v)| (format!("!{}", k), v))
+                        .collect()
+                })
+        })
+    }
 }
 
 impl Backend for BackendHtml {
@@ -92,27 +129,20 @@ impl Backend for BackendHtml {
 
     fn run_command(&mut self, cmd: Command) -> Option<DomNode> {
         if cmd.backend.is_some() {
+            // note: this doesn't have any backend specific commands at the moment
             return None;
         }
-        // very lazy - just to get it to work
-        Some(DomNode::Tag(HtmlTag {
-            tag_name: cmd.cmd,
-            attributes: cmd.attributes,
-            child_nodes: cmd
-                .arguments
-                .into_iter()
-                .filter_map(|arg| self.handle_node(arg))
-                .collect(),
-        }))
+        Some(self.node_from_command(cmd))
     }
 
     fn compile_ast(&mut self, ast: AST) -> String {
-        // fixme: for now - as a very crude first impl, we only use the content
-        ast.nodes
+        let content = ast
+            .nodes
             .into_iter()
             .filter_map(|node| self.handle_node(node))
             .map(|n| n.to_string())
             .collect::<Vec<_>>()
-            .join("")
+            .join("");
+        self.process_template(content, &ast.metadata)
     }
 }

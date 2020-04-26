@@ -31,6 +31,7 @@ A Command Call on a single line
 
 pub use self::parser::parse;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 #[allow(unused)]
 macro_rules! dbgs {
@@ -60,6 +61,52 @@ pub struct Command {
     pub arguments: Vec<ASTNode>,
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum BasicCommandType {
+    Bold,
+    Italic,
+    Section(usize),
+    VertSpace,
+    HorSpace,
+    Image,
+}
+
+impl FromStr for BasicCommandType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use self::BasicCommandType::*;
+        Ok(match s {
+            "b" => Bold,
+            "i" => Italic,
+            "sec" => Section(0),
+            "vspace" => VertSpace,
+            "hspace" => HorSpace,
+            "img" => Image,
+            s if s.starts_with("sec") && s[3..].chars().all(|c| c.is_ascii_digit()) => {
+                Section(s[3..].parse().unwrap())
+            }
+            _ => return Err(()),
+        })
+    }
+}
+
+impl ToString for BasicCommandType {
+    fn to_string(&self) -> String {
+        use self::BasicCommandType::*;
+        match self {
+            Bold => "b",
+            Italic => "i",
+            Section(0) => "sec",
+            Section(n) => return format!("sec{}", n),
+            VertSpace => "vspace",
+            HorSpace => "hspace",
+            Image => "img",
+        }
+        .to_string()
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ASTNode {
     Text(String),
@@ -80,8 +127,21 @@ pub trait Backend {
 
     fn emit_text(&mut self, text: String) -> Self::Rendered;
 
-    // todo: commands such as 'sec', 'b' or 'i' should get their own function and an enum type
     fn run_command(&mut self, cmd: Command) -> Option<Self::Rendered>;
+
+    fn run_basic_command(
+        &mut self,
+        cmd: BasicCommandType,
+        attrs: HashMap<String, String>,
+        args: Vec<ASTNode>,
+    ) -> Option<Self::Rendered> {
+        self.run_command(Command {
+            backend: None,
+            cmd: cmd.to_string(),
+            attributes: attrs,
+            arguments: args,
+        })
+    }
 
     fn handle_node(&mut self, node: ASTNode) -> Option<Self::Rendered> {
         Some(match node {
@@ -99,6 +159,6 @@ pub trait Backend {
     fn compile_ast(&mut self, ast: AST) -> Self::Output;
 }
 
-mod parser;
-
 pub mod backend_html;
+mod parser;
+pub mod template;

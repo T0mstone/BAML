@@ -3,7 +3,7 @@ use crate::{ASTNode, Command, AST};
 use std::collections::HashMap;
 
 #[path = "parser_util.rs"]
-mod util;
+pub mod util;
 
 mod pipeline {
     use crate::parser::util::{containerize, Containerized, CreateAutoEscape};
@@ -99,7 +99,7 @@ mod pipeline {
     }
 }
 
-fn split_unescaped_string<'a>(
+pub fn split_unescaped_string<'a>(
     s: &'a str,
     sep: char,
     max_len: Option<usize>,

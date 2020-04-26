@@ -1,15 +1,14 @@
 use std::iter::Peekable;
 
-pub struct TakeWhilePeek<'a, I, P> {
+/// non-destructive `TakeWhile` that looks at `peek()` instead of at `next()`
+pub struct NDTakeWhile<'a, I: ?Sized, P> {
     iter: &'a mut I,
     flag: bool,
     predicate: P,
 }
 
 // the following code is slightly adapted from `std::iter::adapters::TakeWhile
-impl<'a, I: Iterator, P: for<'b> FnMut(&'b I::Item) -> bool> Iterator
-    for TakeWhilePeek<'a, Peekable<I>, P>
-{
+impl<'a, I: Iterator, P: FnMut(&I::Item) -> bool> Iterator for NDTakeWhile<'a, Peekable<I>, P> {
     type Item = I::Item;
 
     #[inline]
@@ -37,42 +36,115 @@ impl<'a, I: Iterator, P: for<'b> FnMut(&'b I::Item) -> bool> Iterator
     }
 }
 
-pub fn eat_while<I: Iterator, F: FnMut(&I::Item) -> bool>(
-    iter: &mut Peekable<I>,
-    check: F,
-) -> TakeWhilePeek<Peekable<I>, F> {
-    TakeWhilePeek {
-        iter,
-        flag: false,
-        predicate: check,
+pub trait CreateNDTakeWhile<P> {
+    fn take_while_nd(&mut self, predicate: P) -> NDTakeWhile<Self, P>;
+}
+
+impl<I: Iterator, P: FnMut(&I::Item) -> bool> CreateNDTakeWhile<P> for Peekable<I> {
+    fn take_while_nd(&mut self, predicate: P) -> NDTakeWhile<Self, P> {
+        NDTakeWhile {
+            iter: self,
+            flag: false,
+            predicate,
+        }
     }
 }
 
-pub fn eat_while_lvl_gt0<I: Iterator>(
-    iter: &mut Peekable<I>,
-    mut inc_lvl: impl FnMut(&I::Item) -> bool + 'static,
-    mut dec_lvl: impl FnMut(&I::Item) -> bool + 'static,
-) -> TakeWhilePeek<Peekable<I>, Box<dyn FnMut(&I::Item) -> bool>>
-where
-    I::Item: PartialEq,
-{
-    let mut lvl = 0;
-    eat_while(
-        iter,
-        Box::new(move |x| {
-            if inc_lvl(x) {
-                lvl += 1;
-            } else if dec_lvl(x) {
-                if lvl > 0 {
-                    lvl -= 1;
-                } else {
-                    return false;
-                }
-            }
-            true
-        }),
-    )
+// counts left and right delimeters, stopping once the counter goes below zero
+// (returns the final right delimeter too)
+pub struct TakeWhileLevelGe0<'a, I: ?Sized, P, Q> {
+    emit_final: bool,
+    iter: &'a mut I,
+    lvl: Option<usize>,
+    is_inc: P,
+    is_dec: Q,
 }
+
+impl<'a, I: Iterator, P: FnMut(&I::Item) -> bool, Q: FnMut(&I::Item) -> bool> Iterator
+    for TakeWhileLevelGe0<'a, Peekable<I>, P, Q>
+{
+    type Item = I::Item;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let lvl = self.lvl.as_mut()?;
+        let nx = self.iter.next()?;
+        if (self.is_inc)(&nx) {
+            *lvl += 1;
+        } else if (self.is_dec)(&nx) {
+            if *lvl == 0 {
+                self.lvl = None;
+                if !self.emit_final {
+                    return None;
+                }
+            } else {
+                *lvl -= 1;
+            }
+        }
+        Some(nx)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.lvl.is_none() {
+            (0, Some(0))
+        } else {
+            let (_, upper) = self.iter.size_hint();
+            (0, upper)
+        }
+    }
+}
+
+pub trait CreateTakeWhileLevelGe0<P, Q> {
+    fn take_while_lvl_ge0(
+        &mut self,
+        is_inc: P,
+        is_dec: Q,
+        emit_final: bool,
+    ) -> TakeWhileLevelGe0<Self, P, Q>;
+}
+
+impl<I: Iterator, P: FnMut(&I::Item) -> bool, Q: FnMut(&I::Item) -> bool>
+    CreateTakeWhileLevelGe0<P, Q> for Peekable<I>
+{
+    fn take_while_lvl_ge0(
+        &mut self,
+        is_inc: P,
+        is_dec: Q,
+        emit_final: bool,
+    ) -> TakeWhileLevelGe0<Self, P, Q> {
+        TakeWhileLevelGe0 {
+            iter: self,
+            lvl: Some(0),
+            is_inc,
+            is_dec,
+            emit_final,
+        }
+    }
+}
+//
+// pub fn eat_while_lvl_geq0<I: Iterator>(
+//     iter: &mut Peekable<I>,
+//     mut inc_lvl: impl FnMut(&I::Item) -> bool + 'static,
+//     mut dec_lvl: impl FnMut(&I::Item) -> bool + 'static,
+// ) -> NDTakeWhile<Peekable<I>, Box<dyn FnMut(&I::Item) -> bool>>
+// where
+//     I::Item: PartialEq,
+// {
+//     let mut lvl = 0;
+//     iter.nd_take_while(Box::new(move |x| {
+//         if inc_lvl(x) {
+//             lvl += 1;
+//         } else if dec_lvl(x) {
+//             if lvl > 0 {
+//                 lvl -= 1;
+//             } else {
+//                 return false;
+//             }
+//         }
+//         true
+//     }))
+// }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Containerized<T> {
@@ -198,6 +270,20 @@ impl<I: Iterator> CreateAutoEscape for I {
     }
 }
 
+#[inline]
+pub fn char_is_backslash(&c: &char) -> bool {
+    c == '\\'
+}
+
+#[inline]
+pub fn reverse_auto_escape((esc, c): (bool, char)) -> Vec<char> {
+    if esc {
+        vec!['\\', c]
+    } else {
+        vec![c]
+    }
+}
+
 pub struct SplitIter<I: Iterator, F> {
     curr_len: usize,
     max_len: Option<usize>,
@@ -229,7 +315,7 @@ impl<I: Iterator, F: FnMut(&I::Item) -> bool> Iterator for SplitIter<I, F> {
         let res = if self.keep_sep {
             // this keeps the separator in the iter
             self.handle_sep = true;
-            eat_while(&mut self.iter, |t| !is_sep(t)).collect()
+            self.iter.take_while_nd(|t| !is_sep(t)).collect()
         } else {
             // this practically voids the separator
             self.iter.by_ref().take_while(|t| !is_sep(t)).collect()
