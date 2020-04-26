@@ -29,7 +29,7 @@ Cmd can end with a dict literal, denoting its attributes
 A Command Call on a single line
 */
 
-pub use self::parser::parse;
+pub use self::parser::{parse, ParseCommandErr};
 use std::collections::HashMap;
 use std::str::FromStr;
 

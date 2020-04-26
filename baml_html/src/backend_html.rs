@@ -1,7 +1,7 @@
 use baml_core::template::TemplateEngine;
 use baml_core::{Backend, Command, AST};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct HtmlTag {
@@ -73,10 +73,20 @@ pub struct BackendHtml {
 }
 
 impl BackendHtml {
+    pub fn from_template_string_and_dir(template: String, dir: PathBuf) -> Self {
+        Self {
+            template_engine: TemplateEngine::from_string_and_dir(template, dir),
+        }
+    }
+
     pub fn from_template_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         Ok(Self {
             template_engine: TemplateEngine::new(path, HashMap::new())?,
         })
+    }
+
+    pub fn reset(&mut self) {
+        self.template_engine.vars.clear();
     }
 
     pub fn node_from_command(&mut self, cmd: Command) -> DomNode {

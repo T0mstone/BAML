@@ -4,7 +4,7 @@
 //! - `%;` is replaced by `%`
 //! - `%run(cmd)` runs a command
 //! - `%for(args) %( ... %)` is a for loop
-//! - todo: %setext
+//! - `%setext(ext:path)` invokes `Path::with_extension`
 
 use crate::parser::split_unescaped_string;
 use crate::parser::util::{
@@ -21,6 +21,14 @@ pub struct TemplateEngine {
 }
 
 impl TemplateEngine {
+    pub fn from_string_and_dir(template: String, template_dir: PathBuf) -> Self {
+        Self {
+            vars: HashMap::new(),
+            template,
+            template_dir,
+        }
+    }
+
     pub fn new<P: AsRef<Path>>(
         template_path: P,
         vars: HashMap<String, String>,
