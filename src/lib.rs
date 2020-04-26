@@ -3,9 +3,11 @@ Language items:
 In the following, a space denotes r'\s+'
 
 Escaped chars:
-'\#', '\;', '\\', '\!', '\.', '\@', '\[', '\]'
-
-'\<LF>' deletes the line feed
+'\<LF>' -> ''
+'\<SPACE>' -> ''
+    - only the true space character, not any other whitespace
+    - used to opt into whitespace at the start of command args
+'\<x>' -> '<x>'
 
 <Text>
 Text to be displayed
@@ -18,19 +20,37 @@ Comment
 Args are separated with ';'
 Cmd can end with a dict literal, denoting its attributes
 -> dict literals are '{' (key '=' value),* '}'
+-> Cmd can be backend@cmd for backend specific stuff
 
 !<key> <value> <EOL>
 (At start of line) Setting Metadata
 
 .<Cmd> <Args> <EOL>
 A Command Call on a single line
-
-@<Backend>[Stuff]
-Backend specific stuff
 */
 
 pub use self::parser::parse;
 use std::collections::HashMap;
+
+#[allow(unused)]
+macro_rules! dbgs {
+    ($($e:expr),+) => {
+        println!(
+            concat!(
+                "[",
+                file!(),
+                "@",
+                line!(),
+                "] "
+                $(
+                , stringify!($e),
+                " = {:?}",
+                )", "+
+            ),
+            $($e),+
+        )
+    };
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Command {
@@ -79,7 +99,6 @@ pub trait Backend {
     fn compile_ast(&mut self, ast: AST) -> Self::Output;
 }
 
-// mod auto_escape;
 mod parser;
 
 pub mod backend_html;

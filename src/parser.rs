@@ -157,6 +157,7 @@ pub fn parse_command<
     mut v: Vec<Containerized<String>>,
 ) -> Result<impl FnOnce(F) -> Result<Command, ParseCommandErr>, ParseCommandErr> {
     // section: parse initial command
+    // dbgs!(v);
 
     if v.is_empty() {
         return Err(ParseCommandErr::EmptyBody);
@@ -167,12 +168,13 @@ pub fn parse_command<
         Containerized::Contained(_) => return Err(ParseCommandErr::CommandIsNotIdentifier),
     };
 
-    let mut spl = split_unescaped_string(&first, '{', Some(2), true);
+    let mut spl = split_unescaped_string(&first, '{', Some(2), false);
     let cmd_raw_1 = spl.next().unwrap();
 
     if let Some(rest) = spl.next() {
         // `rest` is the start of an attribute: 'cmd{attr'
         v.insert(0, Containerized::Free(rest));
+        v.insert(0, Containerized::Free("{".to_string()));
     }
 
     // split on the first whitespace
@@ -188,17 +190,18 @@ pub fn parse_command<
     let backend = spl.pop().map(|s| s.to_string());
 
     // section: parse attributes
+    // dbgs!(backend, cmd, v);
 
     let mut iter = v.into_iter().peekable();
     let mut put_before = None;
 
     let mut attrs = HashMap::new();
-    match dbg!(iter.peek()) {
-        Some(Containerized::Free(s)) if s.starts_with('{') => {
+    match iter.peek() {
+        Some(Containerized::Free(s)) if s == "{" => {
             let mut attr_string = String::new();
             let mut lvl = 0;
-            'outer: while let Some(c) = iter.next() {
-                match c {
+            'outer: while let Some(el) = iter.next() {
+                match el {
                     Containerized::Free(mut s) => {
                         for (i, c) in s.char_indices() {
                             match c {
@@ -215,7 +218,6 @@ pub fn parse_command<
                             }
                         }
                         attr_string.extend(s.chars());
-                        let _ = iter.next();
                     }
                     c @ Containerized::Contained(_) => {
                         let s = c.join("[", "]");
@@ -238,6 +240,7 @@ pub fn parse_command<
         .peekable();
 
     // section: parse arguments
+    // dbgs!(attrs);
 
     let spl = iter
         .flat_map(|c| match c {
@@ -258,6 +261,14 @@ pub fn parse_command<
     Ok(move |f: F| {
         let args = spl
             .into_iter()
+            .map(|mut v: Vec<Containerized<String>>| {
+                v.first_mut().map(|x| match x {
+                    // note: this is to allow users to opt into having whitespace at the start of args
+                    Containerized::Free(s) => *s = s.trim_start().replace("\\ ", ""),
+                    _ => (),
+                });
+                v
+            })
             .map(f)
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()

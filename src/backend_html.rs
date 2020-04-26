@@ -16,7 +16,6 @@ impl ToString for HtmlTag {
             .map(|(k, v)| format!("{}={:?}", k, v))
             .collect::<Vec<_>>()
             .join(" ");
-        println!("{}", x1);
 
         let x2: String = self
             .child_nodes
@@ -88,7 +87,7 @@ impl Backend for BackendHtml {
     }
 
     fn emit_text(&mut self, text: String) -> DomNode {
-        DomNode::Text(text.replace("\n", "<br />"))
+        DomNode::Text(text.replace("\n", "<br />\n"))
     }
 
     fn run_command(&mut self, cmd: Command) -> Option<DomNode> {
