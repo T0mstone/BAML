@@ -4,6 +4,16 @@
 //! - `%perc` is replaced by `%`
 //! - `%run(cmd)` runs a command
 //! - `%forfiles(args) %( ... %)` is a for loop that runs on files in a directory
+//!     - args are separated by `:`
+//!     - args take the form `<verb> <object>` with the following verbs
+//!         - `with` sets the loop variable
+//!         - `in` sets the loop directory
+//!         - `sort_key` sets a string that will be interpolated and according to which the list will be sorted
+//!         - `sort_order` possibly reverses the sort order
+//!         - `exclude_name` excludes files by name (supports single-star glob)
+//!             - the object is actually a whitespace-separated list of patterns
+//!         - `include_name` includes only files that match (supports single-star glob)
+//!             - the object is actually a whitespace-separated list of patterns
 //! - `%setext(ext:path)` invokes `Path::with_extension`
 //! - `%alt(args)` (args separated by `:`) takes the first non-empty arg
 
