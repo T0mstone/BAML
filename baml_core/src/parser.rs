@@ -31,16 +31,14 @@ mod pipeline {
                     .0;
                 meta.insert(line[1..i].to_string(), line[i1..].to_string());
             } else if line.contains("#") {
-                let mut didnt_end = true;
+                let mut was_escaped = true;
                 let line_iter = line
                     .split("#")
-                    .take_while(|sl| {
-                        let res = didnt_end;
-                        didnt_end = sl.ends_with("\\");
-                        res
-                    })
+                    .take_while(|sl| std::mem::replace(&mut was_escaped, sl.ends_with("\\")))
                     .collect::<String>();
-                res.push(line_iter);
+                if !line_iter.is_empty() {
+                    res.push(line_iter);
+                }
             } else {
                 res.push(line.to_string());
             }

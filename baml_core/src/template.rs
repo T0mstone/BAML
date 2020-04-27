@@ -346,11 +346,6 @@ mod var {
             }
             let mut iter = s[i + 2..].chars().auto_escape(char_is_backslash).peekable();
 
-            // let arg = eat_while_lvl_geq0(
-            //     &mut iter,
-            //     |&(esc, c)| !esc && c == '{',
-            //     |&(esc, c)| !esc && c == '}',
-            // )
             let arg = iter
                 .take_while_lvl_ge0(
                     |&(esc, c)| !esc && c == '{',
@@ -366,10 +361,12 @@ mod var {
             let res = match vars.get(&arg) {
                 Some(s) => s,
                 None => {
-                    eprintln!(
-                        "warning: `%{{{}}}` failed to evaluate: unknown variable",
-                        arg
-                    );
+                    // todo: write ALL warnings into a log file (and add an option to disable it)
+                    //  motivation: it's easier to ignore false positives such as when a `%alt` already takes care of failed variables
+                    // eprintln!(
+                    //     "warning: `%{{{}}}` failed to evaluate: unknown variable",
+                    //     arg
+                    // );
                     ""
                 }
             };
