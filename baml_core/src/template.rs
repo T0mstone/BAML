@@ -1,10 +1,11 @@
 //! template syntax:
 //! - `%content` is replaced by the content - the meat of the file
 //! - `%{x}` is replaced by the value of variable 'x'
-//! - `%;` is replaced by `%`
+//! - `%perc` is replaced by `%`
 //! - `%run(cmd)` runs a command
-//! - `%for(args) %( ... %)` is a for loop
+//! - `%forfiles(args) %( ... %)` is a for loop that runs on files in a directory
 //! - `%setext(ext:path)` invokes `Path::with_extension`
+//! - `%alt(args)` (args separated by `:`) takes the first non-empty arg
 
 use crate::parser::split_unescaped_string;
 use crate::parser::util::{
@@ -55,6 +56,7 @@ impl TemplateEngine {
             let mut var = None;
             let mut path = None;
             let mut exclude_by_name = Vec::new();
+            let mut include_by_name = Vec::new();
             let mut sort_key = None;
             let mut sort_descending = false;
             for arg in args.split(':') {
@@ -78,7 +80,13 @@ impl TemplateEngine {
                     }
                     "exclude_name" => {
                         exclude_by_name.append(
-                            &mut split_unescaped_string(object, ' ', None, false)
+                            &mut split_unescaped_string(object, ' ', None, false, false)
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                    "include_name" => {
+                        include_by_name.append(
+                            &mut split_unescaped_string(object, ' ', None, false, false)
                                 .collect::<Vec<_>>(),
                         );
                     }
@@ -94,11 +102,16 @@ impl TemplateEngine {
                 match entry {
                     Ok(e) => {
                         if e.path().file_name().map_or(false, |filename| {
-                            exclude_by_name.iter().any(|pattern| {
-                                shell::matches_pattern(filename.to_string_lossy().as_ref(), pattern)
-                            })
+                            let filename_owner = filename.to_string_lossy();
+                            let filename = filename_owner.as_ref();
+                            exclude_by_name
+                                .iter()
+                                .any(|pattern| shell::matches_pattern(filename, pattern))
+                                || include_by_name
+                                    .iter()
+                                    .all(|pattern| !shell::matches_pattern(filename, pattern))
                         }) {
-                            // file is excluded
+                            // file is excluded or not included
                             continue;
                         }
                         let mut body = body.to_string();
@@ -167,7 +180,18 @@ impl TemplateEngine {
                 .to_string())
         });
 
-        res.replace("%;", "%")
+        basic_command::replace_all(&mut res, "%alt", |args| {
+            let spl = split_unescaped_string(args, ':', None, false, false);
+            Ok(spl.fold(String::new(), |acc, x| {
+                if acc.is_empty() && !x.is_empty() {
+                    x
+                } else {
+                    acc
+                }
+            }))
+        });
+
+        res.replace("%perc", "%")
     }
 
     pub fn run(

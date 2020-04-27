@@ -105,24 +105,27 @@ pub fn split_unescaped_string<'a>(
     max_len: Option<usize>,
     // keep_sep will keep the separator (on the right side of the split)
     keep_sep: bool,
+    keep_backslash: bool,
 ) -> impl Iterator<Item = String> + 'a {
     s.chars()
-        .auto_escape(|&c| c == '\\')
+        .auto_escape(char_is_backslash)
         .split_impl(max_len, move |&(esc, c)| !esc && c == sep, keep_sep)
-        .map(|v| {
-            v.into_iter()
-                .flat_map(|(esc, c)| if esc { vec!['\\', c] } else { vec![c] })
-                .collect()
+        .map(move |v| {
+            if keep_backslash {
+                v.into_iter().flat_map(reverse_auto_escape).collect()
+            } else {
+                v.into_iter().map(|(_, c)| c).collect()
+            }
         })
 }
 
 fn parse_attrs(s: &str) -> HashMap<String, String> {
-    split_unescaped_string(s, ';', None, false)
+    split_unescaped_string(s, ';', None, false, false)
         // .inspect(|s| println!("> {}", s))
         .filter(|s| s.contains("="))
         .map(|mut sl| {
             let i = sl.char_indices().find(|&(_, c)| c == '=').unwrap().0;
-            let mut r;
+            let r;
             if i + 1 == sl.len() {
                 // eq sign at the end of line
                 r = String::new();
@@ -131,16 +134,7 @@ fn parse_attrs(s: &str) -> HashMap<String, String> {
             }
             // remove the eq sign
             let _ = sl.pop();
-            if sl.chars().next_back().map_or(false, |c| c.is_whitespace()) {
-                let i = sl.trim_end().len();
-                let _ = sl.split_off(i);
-            }
-            if r.chars().next().map_or(false, |c| c.is_whitespace()) {
-                let i = r.len() - r.trim_start().len();
-                let new_r = r.split_off(i);
-                r = new_r;
-            }
-            (sl, r)
+            (sl.trim_end().to_string(), r.trim_start().to_string())
         })
         .collect()
 }
@@ -168,7 +162,7 @@ pub fn parse_command<
         Containerized::Contained(_) => return Err(ParseCommandErr::CommandIsNotIdentifier),
     };
 
-    let mut spl = split_unescaped_string(&first, '{', Some(2), false);
+    let mut spl = split_unescaped_string(&first, '{', Some(2), false, true);
     let cmd_raw_1 = spl.next().unwrap();
 
     if let Some(rest) = spl.next() {

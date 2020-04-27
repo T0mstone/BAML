@@ -90,6 +90,7 @@ impl BackendHtml {
     }
 
     pub fn node_from_command(&mut self, cmd: Command) -> DomNode {
+        // todo: improve this
         DomNode::Tag(HtmlTag {
             tag_name: cmd.cmd,
             attributes: cmd.attributes,
@@ -136,12 +137,24 @@ impl Backend for BackendHtml {
         DomNode::Text(text.replace("\n", "<br />\n"))
     }
 
-    fn run_command(&mut self, cmd: Command) -> Option<DomNode> {
-        if cmd.backend.is_some() {
-            // note: this doesn't have any backend specific commands at the moment
-            return None;
+    fn run_command(&mut self, mut cmd: Command) -> Option<DomNode> {
+        match cmd.backend.as_deref() {
+            Some("html") => {
+                // this serves the purpose of allowing you to insert any html tag with nice syntax
+                // you could probably insert a tag as raw html but that's ugly
+                if cmd.cmd.starts_with("tag.") {
+                    cmd.cmd.replace_range(0..4, "");
+                    Some(self.node_from_command(cmd))
+                } else {
+                    None
+                }
+            }
+            Some(_) => None,
+            None => {
+                // todo: handle some of these commands differently
+                Some(self.node_from_command(cmd))
+            }
         }
-        Some(self.node_from_command(cmd))
     }
 
     fn compile_ast(&mut self, ast: AST) -> String {

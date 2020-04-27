@@ -159,6 +159,5 @@ pub trait Backend {
     fn compile_ast(&mut self, ast: AST) -> Self::Output;
 }
 
-// pub mod backend_html;
 mod parser;
 pub mod template;
