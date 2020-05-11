@@ -1,11 +1,21 @@
 [package]
 name = "baml_html"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["T0mstone <realt0mstone@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-baml_core = {path = "../baml_core"}
+baml_core = { path = "../baml_core" }
 clap = "2.33.0"
+
+[dependencies.ppm]
+git = "https://github.com/T0mstone/ppm"
+rev = "22f81602aa891b99de899f39bdebabd511c28810"
+#path = "../../ppm" # for development purposes (on my machine)
+features = ["regex"]
+
+[dependencies.tlib]
+git = "https://github.com/T0mstone/tlib"
+rev = "048f9005b8512f79a615b2bfdce98ed8993dc7d5"
+#path = "../../tlib" # for development purposes (on my machine)
+features = ["use_std"]

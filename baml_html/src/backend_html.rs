@@ -1,12 +1,54 @@
-use baml_core::template::TemplateEngine;
 use baml_core::{Backend, Command, AST};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+
+mod ppm_extensions {
+    use super::*;
+    use ppm::{predefined_commands::tools, CommandConfig, Engine, Free, Issue};
+
+    pub fn make_engine(vars: HashMap<String, String>) -> Engine<Free> {
+        let mut res = Engine::with_predefined_commands(vars);
+        res.add_command("file_meta", get_file_meta_handler as _)
+            .unwrap();
+        res
+    }
+
+    pub fn get_file_meta_handler(mut cfg: CommandConfig) -> String {
+        let mut spl = tools::splitn_args(2, cfg.body.clone()).into_iter();
+        // let mut spl = cfg.body.splitn_not_escaped(2, ':', '\\', false).into_iter();
+        let path = spl.next().unwrap();
+        let key = match spl.next() {
+            Some(x) => x,
+            None => {
+                cfg.issues
+                    .push(cfg.missing_args("no metadata key provided"));
+                return String::new();
+            }
+        };
+
+        let path = cfg.process(path);
+        let key = cfg.process(key);
+
+        let content = match std::fs::read_to_string(path) {
+            Ok(x) => x,
+            Err(e) => {
+                cfg.issues.push(Issue::io_error(
+                    e,
+                    cfg.cmd_span,
+                    Some("while trying to open file"),
+                ));
+                return String::new();
+            }
+        };
+
+        let meta = baml_core::get_metadata(content);
+        cfg.process(meta.get(&key).cloned().unwrap_or_default())
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct HtmlTag {
     tag_name: String,
-    attributes: HashMap<String, String>,
+    attributes: Vec<(String, String)>,
     child_nodes: Vec<DomNode>,
 }
 
@@ -67,26 +109,32 @@ impl ToString for DomNode {
 //     // }
 // }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct BackendHtml {
-    template_engine: TemplateEngine,
+    template: String,
+    vars: HashMap<String, String>,
+    special_vars: HashMap<String, String>,
 }
 
 impl BackendHtml {
-    pub fn from_template_string_and_dir(template: String, dir: PathBuf) -> Self {
+    // pub fn from_template_string_and_dir(template: String, dir: PathBuf) -> Self {
+    //     Self {
+    //         template_engine: TemplateEngine::from_string_and_dir(template, dir),
+    //     }
+    // }
+    //
+    // pub fn from_template_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+    //     Ok(Self {
+    //         template_engine: TemplateEngine::new(path, HashMap::new())?,
+    //     })
+    // }
+
+    pub fn new(template: String, vars: HashMap<String, String>) -> Self {
         Self {
-            template_engine: TemplateEngine::from_string_and_dir(template, dir),
+            template,
+            vars,
+            special_vars: HashMap::new(),
         }
-    }
-
-    pub fn from_template_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
-        Ok(Self {
-            template_engine: TemplateEngine::new(path, HashMap::new())?,
-        })
-    }
-
-    pub fn reset(&mut self) {
-        self.template_engine.vars.clear();
     }
 
     pub fn node_from_command(&mut self, cmd: Command) -> DomNode {
@@ -102,26 +150,25 @@ impl BackendHtml {
         })
     }
 
-    pub fn process_template(&mut self, content: String, meta: &HashMap<String, String>) -> String {
-        for (k, v) in meta {
-            self.template_engine
-                .vars
-                .insert(format!("!{}", k), v.clone());
+    pub fn set_special_vars(&mut self, content_var: String, meta: &HashMap<String, String>) {
+        if !self.special_vars.is_empty() {
+            self.special_vars.clear()
         }
-        self.template_engine
-            .vars
-            .insert("content".to_string(), content);
-        self.template_engine.run(|p| {
-            std::fs::read_to_string(p)
-                .ok()
-                .and_then(|s| baml_core::parse(s).ok())
-                .map_or(HashMap::new(), |ast| {
-                    ast.metadata
-                        .into_iter()
-                        .map(|(k, v)| (format!("!{}", k), v))
-                        .collect()
-                })
-        })
+        for (k, v) in meta {
+            self.special_vars.insert(format!("!{}", k), v.clone());
+        }
+        self.special_vars.insert("content".to_string(), content_var);
+    }
+
+    pub fn main(&mut self) -> String {
+        let mut engine = ppm_extensions::make_engine(self.vars.clone());
+        engine.vars.extend(self.vars.clone());
+        engine.vars.extend(self.special_vars.clone());
+        let (res, is) = engine.process_new(self.template.clone());
+        for issue in is {
+            eprintln!("warning: {}", issue.display(&self.template));
+        }
+        res
     }
 }
 
@@ -165,6 +212,7 @@ impl Backend for BackendHtml {
             .map(|n| n.to_string())
             .collect::<Vec<_>>()
             .join("");
-        self.process_template(content, &ast.metadata)
+        self.set_special_vars(content, &ast.metadata);
+        self.main()
     }
 }

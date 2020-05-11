@@ -1,15 +1,18 @@
-use self::util::*;
+// use self::util::*;
+use crate::parser::util::{str_split_keep_sep, Containerized};
 use crate::{ASTNode, Command, AST};
 use std::collections::HashMap;
+use tlib::iter_tools::{IterSplit, SplitNotEscapedString};
 
 #[path = "parser_util.rs"]
 pub mod util;
 
 mod pipeline {
-    use crate::parser::util::{containerize, Containerized, CreateAutoEscape};
+    use crate::parser::util::{containerize, Containerized};
     use crate::parser::{parse_command, ParseCommandErr};
     use crate::ASTNode;
     use std::collections::HashMap;
+    use tlib::iter_tools::AutoEscape;
 
     /// Extracts comments and metadata as well as deleting escaped line-feeds
     // todo: proper error handling
@@ -17,8 +20,8 @@ mod pipeline {
         let mut meta = HashMap::new();
         let mut res = Vec::new();
         let s = s.replace("\\\n", "");
-        for line in s.split("\n") {
-            if line.starts_with("!") {
+        for line in s.split('\n') {
+            if line.starts_with('!') {
                 let i = line
                     .char_indices()
                     .find(|(_, c)| c.is_whitespace())
@@ -30,11 +33,11 @@ mod pipeline {
                     .expect("Found Metadata without value")
                     .0;
                 meta.insert(line[1..i].to_string(), line[i1..].to_string());
-            } else if line.contains("#") {
+            } else if line.contains('#') {
                 let mut was_escaped = true;
                 let line_iter = line
-                    .split("#")
-                    .take_while(|sl| std::mem::replace(&mut was_escaped, sl.ends_with("\\")))
+                    .split('#')
+                    .take_while(|sl| std::mem::replace(&mut was_escaped, sl.ends_with('\\')))
                     .collect::<String>();
                 if !line_iter.is_empty() {
                     res.push(line_iter);
@@ -48,9 +51,9 @@ mod pipeline {
 
     /// Transforms single line function calls into proper ones
     pub fn desugar_slfcalls(s: String) -> String {
-        s.split("\n")
+        s.split('\n')
             .map(|line| {
-                if line.starts_with(".") {
+                if line.starts_with('.') {
                     format!("[{}]", &line[1..])
                 } else {
                     line.to_string()
@@ -60,6 +63,8 @@ mod pipeline {
             .join("\n")
     }
 
+    // note: vvv idk why but the IDE doesn't detect the very CLEAR AND UNAMBIGUOUS `use tlib::iter_tools::AutoEscape;` at the top
+    // noinspection RsUnresolvedReference
     /// Containerizes the input, respecting escape characters
     fn parse_step1(s: String) -> Vec<Containerized<String>> {
         let mut iter = s.chars().auto_escape(|&c| c == '\\').peekable();
@@ -97,42 +102,44 @@ mod pipeline {
     }
 }
 
-pub fn split_unescaped_string<'a>(
-    s: &'a str,
-    sep: char,
-    max_len: Option<usize>,
-    // keep_sep will keep the separator (on the right side of the split)
-    keep_sep: bool,
-    keep_backslash: bool,
-) -> impl Iterator<Item = String> + 'a {
-    s.chars()
-        .auto_escape(char_is_backslash)
-        .split_impl(max_len, move |&(esc, c)| !esc && c == sep, keep_sep)
-        .map(move |v| {
-            if keep_backslash {
-                v.into_iter().flat_map(reverse_auto_escape).collect()
-            } else {
-                v.into_iter().map(|(_, c)| c).collect()
-            }
-        })
-}
+// pub fn split_unescaped_string<'a>(
+//     s: &'a str,
+//     sep: char,
+//     max_len: Option<usize>,
+//     // keep_sep will keep the separator (on the right side of the split)
+//     keep_sep: bool,
+//     keep_backslash: bool,
+// ) -> impl Iterator<Item = String> + 'a {
+//     s.chars()
+//         .auto_escape(indicator('\\'))
+//         .split_impl(max_len, move |&(esc, c)| !esc && c == sep, keep_sep)
+//         .map(move |v| {
+//             if keep_backslash {
+//                 v.into_iter().flat_map(reverse_auto_escape).collect()
+//             } else {
+//                 v.into_iter().map(|(_, c)| c).collect()
+//             }
+//         })
+// }
 
-fn parse_attrs(s: &str) -> HashMap<String, String> {
-    split_unescaped_string(s, ';', None, false, false)
+// note: vvv idk why but the IDE doesn't detect the very CLEAR AND UNAMBIGUOUS `use tlib::iter_tools::{IterSplit, SplitNotEscapedString};` at the top
+// noinspection RsUnresolvedReference
+fn parse_attrs(s: &str) -> Vec<(String, String)> {
+    s.split_not_escaped::<Vec<_>>(';', '\\', false)
+        .into_iter()
+        // split_unescaped_string(s, ';', None, false, false)
         // .inspect(|s| println!("> {}", s))
-        .filter(|s| s.contains("="))
+        .filter(|s| s.contains('='))
         .map(|mut sl| {
             let i = sl.char_indices().find(|&(_, c)| c == '=').unwrap().0;
-            let r;
-            if i + 1 == sl.len() {
-                // eq sign at the end of line
-                r = String::new();
+            let r = if i + 1 == sl.len() {
+                String::new()
             } else {
-                r = sl.split_off(i + 1);
-            }
+                sl.split_off(i + 1)
+            };
             // remove the eq sign
             let _ = sl.pop();
-            (sl.trim_end().to_string(), r.trim_start().to_string())
+            (sl.trim().to_string(), r.trim_start().to_string())
         })
         .collect()
 }
@@ -143,6 +150,8 @@ pub enum ParseCommandErr {
     CommandIsNotIdentifier,
 }
 
+// note: vvv idk why but the IDE doesn't detect the very CLEAR AND UNAMBIGUOUS `use tlib::iter_tools::{IterSplit, SplitNotEscapedString};` at the top
+// noinspection RsUnresolvedReference
 pub fn parse_command<
     F: FnMut(Vec<Containerized<String>>) -> Result<Vec<ASTNode>, ParseCommandErr>,
 >(
@@ -160,7 +169,10 @@ pub fn parse_command<
         Containerized::Contained(_) => return Err(ParseCommandErr::CommandIsNotIdentifier),
     };
 
-    let mut spl = split_unescaped_string(&first, '{', Some(2), false, true);
+    // let mut spl = split_unescaped_string(&first, '{', Some(2), false, true);
+    let mut spl = first
+        .splitn_not_escaped::<Vec<_>>(2, '{', '\\', false)
+        .into_iter();
     let cmd_raw_1 = spl.next().unwrap();
 
     if let Some(rest) = spl.next() {
@@ -169,7 +181,7 @@ pub fn parse_command<
         v.insert(0, Containerized::Free("{".to_string()));
     }
 
-    // split on the first whitespace
+    // split on the first whitespace because `cmd_raw_1` could contain more than the command`
     let mut spl = cmd_raw_1.splitn(2, char::is_whitespace);
     let cmd_raw_2 = spl.next().unwrap();
 
@@ -187,7 +199,7 @@ pub fn parse_command<
     let mut iter = v.into_iter().peekable();
     let mut put_before = None;
 
-    let mut attrs = HashMap::new();
+    let mut attrs = Vec::new();
     match iter.peek() {
         Some(Containerized::Free(s)) if s == "{" => {
             let mut attr_string = String::new();
@@ -200,7 +212,7 @@ pub fn parse_command<
                                 '{' => lvl += 1,
                                 '}' if lvl == 1 => {
                                     let mut right = s.split_off(i);
-                                    attr_string.extend(s.chars());
+                                    attr_string.push_str(&s);
                                     right.remove(0);
                                     put_before = Some(right);
                                     break 'outer;
@@ -209,7 +221,7 @@ pub fn parse_command<
                                 _ => (),
                             }
                         }
-                        attr_string.extend(s.chars());
+                        attr_string.push_str(&s);
                     }
                     c @ Containerized::Contained(_) => {
                         let s = c.join("[", "]");
@@ -254,11 +266,10 @@ pub fn parse_command<
         let args = spl
             .into_iter()
             .map(|mut v: Vec<Containerized<String>>| {
-                v.first_mut().map(|x| match x {
+                if let Some(Containerized::Free(s)) = v.first_mut() {
                     // note: this is to allow users to opt into having whitespace at the start of args
-                    Containerized::Free(s) => *s = s.trim_start().replace("\\ ", ""),
-                    _ => (),
-                });
+                    *s = s.trim_start().replace("\\ ", "")
+                }
                 v
             })
             .map(f)
@@ -284,4 +295,9 @@ pub fn parse(s: String) -> Result<AST, ParseCommandErr> {
         metadata: meta,
         nodes: parse_desugared(desugared)?,
     })
+}
+
+#[inline]
+pub fn get_metadata(s: String) -> HashMap<String, String> {
+    self::pipeline::preprocess(s).0
 }

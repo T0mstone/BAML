@@ -60,9 +60,10 @@ fn main() {
 
     let template = resolve_path(matches.value_of_os("template").unwrap(), cwd.clone());
 
-    let mut backend = BackendHtml::from_template_file(template).unwrap_or_else(|_| {
-        BackendHtml::from_template_string_and_dir("%{content}".to_string(), cwd.clone())
-    });
+    let mut backend = BackendHtml::new(
+        std::fs::read_to_string(template).unwrap_or_else(|_| "(%content%)".to_string()),
+        HashMap::new(),
+    );
 
     let output_dir = resolve_path(matches.value_of_os("output-dir").unwrap(), cwd.clone());
     if let Err(e) = std::fs::create_dir_all(&output_dir) {
@@ -71,9 +72,9 @@ fn main() {
     }
 
     if let Some(s) = matches.value_of_os("dry-run") {
-        let path = resolve_path(s, cwd.clone());
+        let path = resolve_path(s, cwd);
 
-        let mut out_path = output_dir.clone();
+        let mut out_path = output_dir;
         out_path.push(path.with_extension("html").file_name().unwrap());
 
         // we skip the parsing process and directly use an empty AST
@@ -136,7 +137,6 @@ fn main() {
         };
 
         let compiled = backend.compile_ast(ast);
-        backend.reset();
 
         match std::fs::write(&out_path, compiled) {
             Ok(()) => println!("created {}", out_path.to_string_lossy()),

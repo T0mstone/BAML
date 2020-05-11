@@ -29,37 +29,22 @@ Cmd can end with a dict literal, denoting its attributes
 A Command Call on a single line
 */
 
-pub use self::parser::{parse, ParseCommandErr};
+pub use self::parser::{get_metadata, parse, ParseCommandErr};
 use std::collections::HashMap;
 use std::str::FromStr;
-
-#[allow(unused)]
-macro_rules! dbgs {
-    ($($e:expr),+) => {
-        println!(
-            concat!(
-                "[",
-                file!(),
-                "@",
-                line!(),
-                "] "
-                $(
-                , stringify!($e),
-                " = {:?}",
-                )", "+
-            ),
-            $($e),+
-        )
-    };
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Command {
     pub backend: Option<String>,
     pub cmd: String,
-    pub attributes: HashMap<String, String>,
+    pub attributes: Vec<(String, String)>,
     pub arguments: Vec<ASTNode>,
 }
+
+// todo:
+//  - macros
+//  - implement foundational commands as functions in the Backend trait
+//  - implement other commands on top of the foundationals
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BasicCommandType {
@@ -132,7 +117,7 @@ pub trait Backend {
     fn run_basic_command(
         &mut self,
         cmd: BasicCommandType,
-        attrs: HashMap<String, String>,
+        attrs: Vec<(String, String)>,
         args: Vec<ASTNode>,
     ) -> Option<Self::Rendered> {
         self.run_command(Command {
@@ -160,4 +145,4 @@ pub trait Backend {
 }
 
 mod parser;
-pub mod template;
+// pub mod template;
